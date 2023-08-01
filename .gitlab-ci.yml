@@ -1,0 +1,74 @@
+stages:
+  - publish
+  - build-node
+  - build-docker
+  - deploy
+  - lint
+
+
+publish:
+  image: node:18-bullseye-slim
+  stage: publish
+  script:
+    - echo "@js-apps:registry=https://${CI_SERVER_HOST}/api/v4/projects/${CI_PROJECT_ID}/packages/npm/" > .npmrc
+    - echo "//${CI_SERVER_HOST}/api/v4/projects/${CI_PROJECT_ID}/packages/npm/:_authToken=${CI_JOB_TOKEN}" >> .npmrc
+    - npm publish
+  only:
+    - main
+    - master
+    - develop
+  tags:
+    - docker-20
+    - linux
+  artifacts:
+    paths:
+      - dist
+
+
+build app:
+  image: node:18-bullseye-slim
+  stage: build-node
+  script:
+    #- yarn set version stable
+    #- yarn config set nodeLinker node-modules
+    #- yarn config set npmScopes.js-apps.npmRegistryServer https://git.drofa.ru/api/v4/packages/npm/
+    #- yarn config set npmScopes.js-apps.npmAlwaysAuth true 
+    #- yarn config set npmScopes.js-apps.npmAuthToken ${JSAPPS_ACCESS_TOKEN_SECRET}
+    #- yarn -v
+    #- yarn config
+    #- yarn up
+    #- yarn install
+    #- yarn build
+    - echo "@js-apps:registry=https://${CI_SERVER_HOST}/api/v4/packages/npm/" > .npmrc
+    - echo "//${CI_SERVER_HOST}/api/v4/packages/npm/:_authToken=${JSAPPS_ACCESS_TOKEN_SECRET}" >> .npmrc
+    - npm fund
+    - npm install
+    - npm run build
+    - 'echo "<!-- buildver: ${CI_COMMIT_SHORT_SHA}/$(date +''%F %X %Z'') -->" >> dist/index.xhtml'
+  only:
+    - main
+    - master
+    - develop
+  tags:
+    - docker-20
+    - linux
+  artifacts:
+    paths:
+      - dist
+      
+
+
+deploy:
+  stage: deploy
+  script:
+      - rsync -rDl   ./dist/ /var/www/html/x3-page-cats-regat/
+  only:
+    - main
+    - master
+    - develop
+  tags:
+    - shell
+    - linux
+    - testserver
+  variables:
+    GIT_STRATEGY: clone
